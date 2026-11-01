@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineEngineAdapterContract } from '@vtl/adapter-contract-tests';
+import { defineEngineAdapterContract } from '../../adapter-contract-tests/src/index.js';
 import { runtimeId, worldId, type World } from '@vtl/domain';
 import { ThreeJsEngineAdapter } from '../src/index.js';
 
