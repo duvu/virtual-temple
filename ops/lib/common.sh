@@ -33,8 +33,14 @@ vtl_healthcheck() {
 
 vtl_wait_for_health() {
   local timeout="${1:-30}" interval="${2:-1}" deadline
-  if [[ ! "${timeout}" =~ ^[0-9]+$ || ! "${interval}" =~ ^[0-9]+$ ]] || (( interval < 1 )); then
-    printf 'Health timeout and interval must be integers; interval must be at least 1 second.\n' >&2
+  if [[ ! "${timeout}" =~ ^[0-9]+$ || ! "${interval}" =~ ^[0-9]+$ ]]; then
+    printf 'Health timeout and interval must be integers.\n' >&2
+    return 2
+  fi
+  timeout="$((10#${timeout}))"
+  interval="$((10#${interval}))"
+  if (( interval < 1 )); then
+    printf 'Health interval must be at least 1 second.\n' >&2
     return 2
   fi
   deadline=$((SECONDS + timeout))
