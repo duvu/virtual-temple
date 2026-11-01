@@ -12,7 +12,8 @@ export async function registerRuntimeRoutes(app: FastifyInstance, channels: Chan
     const params = paramsSchema.parse(request.params);
     const record = await app.runtimeRepository.get(runtimeId(params.runtimeId));
     if (!record) throw new EntityNotFoundError('Runtime');
-    return record;
+    if (record.error === undefined) return record;
+    return { ...record, error: { code: 'ADAPTER_FAILURE', message: 'Adapter operation failed' } };
   });
   app.post('/runtimes/:runtimeId/actions', async (request) => {
     const params = paramsSchema.parse(request.params);

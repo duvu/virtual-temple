@@ -123,6 +123,10 @@ describe('API', () => {
     expect(response.statusCode).toBe(502);
     expect(response.json()).toEqual({ error: { code: 'ADAPTER_FAILURE', message: 'Adapter operation failed' } });
     expect(response.body).not.toContain('secret stack detail');
+    const persisted = await app.inject(`/runtimes/${id}`);
+    expect(persisted.statusCode).toBe(200);
+    expect(persisted.body).not.toContain('secret stack detail');
+    expect(persisted.body).not.toContain('stack');
     await app.close();
   });
 });
