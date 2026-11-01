@@ -21,6 +21,8 @@ const worldInputSchema = z.object({
   lighting: jsonSchema.optional(), audio: jsonSchema.optional(), effects: jsonSchema.optional(),
 });
 const createChannelSchema = z.object({ name: z.string().trim().min(1), engineId: z.string().trim().min(1).optional(), world: worldInputSchema });
+const preferDefined = <T>(primary: T | undefined, fallback: T | undefined, defaultValue: T): T =>
+  primary !== undefined ? primary : fallback !== undefined ? fallback : defaultValue;
 
 export async function registerChannelRoutes(app: FastifyInstance, channels: ChannelRepository, adapterEngineId: string): Promise<void> {
   app.post('/channels', async (request, reply) => {
@@ -30,13 +32,13 @@ export async function registerChannelRoutes(app: FastifyInstance, channels: Chan
     if (engineId !== adapterEngineId) throw new ChannelEngineMismatchError();
     const id = channelId(randomUUID());
     const worldKey = worldId(randomUUID());
-    const environment = input.world.environment ?? input.world.scene?.environment ?? {};
-    const camera = input.world.camera ?? input.world.scene?.camera ?? {};
+    const environment = preferDefined(input.world.environment, input.world.scene?.environment, {});
+    const camera = preferDefined(input.world.camera, input.world.scene?.camera, {});
     const characters = input.world.characters ?? input.world.scene?.characters ?? [];
     const assetIds = input.world.assetIds ?? input.world.scene?.assetIds ?? [];
-    const lighting = input.world.lighting ?? input.world.scene?.lighting ?? {};
-    const audio = input.world.audio ?? input.world.scene?.audio ?? {};
-    const effects = input.world.effects ?? input.world.scene?.effects ?? {};
+    const lighting = preferDefined(input.world.lighting, input.world.scene?.lighting, {});
+    const audio = preferDefined(input.world.audio, input.world.scene?.audio, {});
+    const effects = preferDefined(input.world.effects, input.world.scene?.effects, {});
     const sceneId = input.world.scene?.sceneId ?? randomUUID();
     const world: World = {
       worldId: worldKey, name: input.world.name,

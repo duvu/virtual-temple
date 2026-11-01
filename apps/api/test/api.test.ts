@@ -91,6 +91,19 @@ describe('API', () => {
     await app.close();
   });
 
+  it('preserves explicit top-level null over a nested scene value', async () => {
+    const adapter = new TestAdapter();
+    const app = makeApp(adapter);
+    const created = await app.inject({
+      method: 'POST', url: '/channels',
+      payload: { name: 'Nullable', world: { name: 'Nullable world', environment: null, scene: { environment: { source: 'scene' } } } },
+    });
+    const runtime = await app.inject({ method: 'POST', url: `/channels/${created.json().channelId}/runtimes` });
+    await app.inject({ method: 'POST', url: `/runtimes/${runtime.json().runtimeId}/actions`, payload: { action: 'initialize' } });
+    expect(adapter.loadedWorlds[0]).toMatchObject({ environment: null, scene: { environment: null } });
+    await app.close();
+  });
+
   it('runs initialize and the lifecycle actions', async () => {
     const app = makeApp();
     const channel = await createChannel(app, 'One');
