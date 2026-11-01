@@ -24,10 +24,121 @@ fi
 pid_file="${VTL_RUN_DIR}/api.pid"
 log_file="${VTL_RUN_DIR}/api.log"
 pid_tmp=""
+api_pid=""
+startup_cleanup_armed=1
 cleanup() {
-  [[ -z "${pid_tmp}" ]] || rm -f -- "${pid_tmp}"
+  if [[ -n "${pid_tmp}" && -e "${pid_tmp}" ]]; then
+    if [[ -z "${api_pid}" ]] || ! kill -0 "${api_pid}" 2>/dev/null; then
+      rm -f -- "${pid_tmp}"
+    fi
+  fi
 }
 trap cleanup EXIT
+
+publish_startup_pid() {
+  local current_pid=""
+  if [[ -e "${pid_file}" ]]; then
+    IFS= read -r current_pid < "${pid_file}" || true
+    if [[ "${current_pid}" == "${api_pid}" ]]; then
+      return 0
+    fi
+    printf 'Cannot publish managed PID %s because %s now contains another PID.\n' "${api_pid}" "${pid_file}" >&2
+    return 1
+  fi
+  if [[ -z "${pid_tmp}" ]]; then
+    pid_tmp="$(mktemp "${VTL_RUN_DIR}/api.pid.XXXXXXXX")"
+  fi
+  printf '%s\n' "${api_pid}" > "${pid_tmp}"
+  mv -f -- "${pid_tmp}" "${pid_file}"
+  pid_tmp=""
+}
+
+cleanup_startup_child() {
+  local identity_status second
+  local -a startup_jobs=()
+  if [[ -z "${api_pid}" ]]; then
+    # Bash records the async job before delivering a pending trap, even if it
+    # arrives in the small interval before the following `$!` assignment.
+    mapfile -t startup_jobs < <(jobs -pr)
+    if (( ${#startup_jobs[@]} == 1 )) && [[ "${startup_jobs[0]}" =~ ^[1-9][0-9]*$ ]]; then
+      api_pid="${startup_jobs[0]}"
+    fi
+  fi
+  if [[ -z "${api_pid}" ]]; then
+    return 0
+  fi
+
+  set +e
+  vtl_pid_is_api_process "${api_pid}"
+  identity_status=$?
+  set -e
+  if (( identity_status == 0 )); then
+    # Revalidate immediately before signaling to reduce the PID-reuse window.
+    set +e
+    vtl_pid_is_api_process "${api_pid}"
+    identity_status=$?
+    set -e
+    if (( identity_status == 0 )); then
+      if ! kill -TERM "${api_pid}"; then
+        printf 'Could not TERM managed API child %s.\n' "${api_pid}" >&2
+        return 1
+      fi
+    fi
+  fi
+
+  if (( identity_status != 0 )) && kill -0 "${api_pid}" 2>/dev/null; then
+    printf 'Cannot safely signal PID %s; leaving its process and PID state untouched.\n' "${api_pid}" >&2
+    return 1
+  fi
+
+  for ((second = 0; second < 15; second++)); do
+    if ! kill -0 "${api_pid}" 2>/dev/null; then
+      wait "${api_pid}" 2>/dev/null || true
+      local current_pid=""
+      IFS= read -r current_pid < "${pid_file}" || true
+      [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
+      [[ -z "${pid_tmp}" ]] || rm -f -- "${pid_tmp}"
+      pid_tmp=""
+      return 0
+    fi
+    sleep 1
+  done
+
+  if ! kill -0 "${api_pid}" 2>/dev/null; then
+    wait "${api_pid}" 2>/dev/null || true
+    local current_pid=""
+    IFS= read -r current_pid < "${pid_file}" || true
+    [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
+    [[ -z "${pid_tmp}" ]] || rm -f -- "${pid_tmp}"
+    pid_tmp=""
+    return 0
+  fi
+
+  if ! publish_startup_pid; then
+    printf 'Startup child %s remains alive; PID file/temp state retained for manual stop.\n' "${api_pid}" >&2
+    return 1
+  fi
+  printf 'Startup child %s did not stop within 15 seconds; PID file and log retained for manual stop.\n' "${api_pid}" >&2
+  return 1
+}
+
+handle_startup_signal() {
+  local signal="$1" signal_status
+  case "${signal}" in
+    INT) signal_status=130 ;;
+    TERM) signal_status=143 ;;
+    HUP) signal_status=129 ;;
+    *) signal_status=1 ;;
+  esac
+  trap '' INT TERM HUP
+  if (( startup_cleanup_armed )); then
+    cleanup_startup_child || true
+  fi
+  exit "${signal_status}"
+}
+trap 'handle_startup_signal INT' INT
+trap 'handle_startup_signal TERM' TERM
+trap 'handle_startup_signal HUP' HUP
 
 vtl_require_command pnpm
 vtl_require_command node
@@ -71,64 +182,13 @@ mv -f -- "${pid_tmp}" "${pid_file}"
 pid_tmp=""
 
 if vtl_wait_for_health 30 1; then
+  startup_cleanup_armed=0
+  trap - INT TERM HUP
   printf 'API is healthy (PID %s) at %s/healthz. Log: %s\n' "${api_pid}" "${VTL_BASE_URL}" "${log_file}"
   exit 0
 fi
 
+trap '' INT TERM HUP
 printf 'API process %s failed its health check; attempting to stop the managed child.\n' "${api_pid}" >&2
-set +e
-vtl_pid_is_api_process "${api_pid}"
-identity_status=$?
-set -e
-if (( identity_status == 2 )); then
-  printf 'Cannot verify PID %s on this platform; PID file and log retained for manual stop.\n' "${api_pid}" >&2
-  exit 1
-elif (( identity_status == 0 )); then
-  # Recheck immediately before signaling to reduce the PID-reuse window.
-  set +e
-  vtl_pid_is_api_process "${api_pid}"
-  identity_status=$?
-  set -e
-  if (( identity_status == 0 )); then
-    if ! kill -TERM "${api_pid}"; then
-      printf 'Could not TERM managed API child %s; PID file and log retained for manual stop.\n' "${api_pid}" >&2
-      exit 1
-    fi
-  fi
-fi
-
-if (( identity_status != 0 )); then
-  if ! kill -0 "${api_pid}" 2>/dev/null; then
-    current_pid=""
-    IFS= read -r current_pid < "${pid_file}" || true
-    [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
-    wait "${api_pid}" 2>/dev/null || true
-    printf 'Unhealthy API child exited; removed its PID file. Log: %s\n' "${log_file}" >&2
-    exit 1
-  fi
-  printf 'Cannot safely signal PID %s; PID file and log retained for manual stop.\n' "${api_pid}" >&2
-  exit 1
-fi
-
-for ((second = 0; second < 15; second++)); do
-  if ! kill -0 "${api_pid}" 2>/dev/null; then
-    wait "${api_pid}" 2>/dev/null || true
-    current_pid=""
-    IFS= read -r current_pid < "${pid_file}" || true
-    [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
-    printf 'Unhealthy API child stopped; removed its PID file. Log: %s\n' "${log_file}" >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-if ! kill -0 "${api_pid}" 2>/dev/null; then
-  wait "${api_pid}" 2>/dev/null || true
-  current_pid=""
-  IFS= read -r current_pid < "${pid_file}" || true
-  [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
-  printf 'Unhealthy API child stopped; removed its PID file. Log: %s\n' "${log_file}" >&2
-  exit 1
-fi
-printf 'Unhealthy API child %s did not stop within 15 seconds; PID file and log retained for manual stop.\n' "${api_pid}" >&2
+cleanup_startup_child || true
 exit 1
