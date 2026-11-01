@@ -1,0 +1,10 @@
+{
+  "name": "@vtl/engine-threejs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
+  "dependencies": { "@vtl/application": "workspace:*", "@vtl/domain": "workspace:*", "three": "^0.180.0" },
+  "devDependencies": { "@types/three": "^0.180.0", "@vtl/adapter-contract-tests": "workspace:*", "typescript": "^5.7.3", "vitest": "^2.1.8" }
+}
