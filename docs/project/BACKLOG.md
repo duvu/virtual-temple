@@ -6,7 +6,7 @@ This backlog is ordered by prerequisite and delivery priority. Items are not com
 
 - [x] **VTL-001** Establish pnpm TypeScript workspace and root scripts.
 - [x] **VTL-002** Define engine-independent channel, world, normalized event, command, capability, and runtime contracts.
-- [ ] **VTL-003** Implement runtime lifecycle orchestration and in-memory runtime repository.
+- [x] **VTL-003** Implement runtime lifecycle orchestration and in-memory runtime repository.
 - [ ] **VTL-004** Implement Three.js adapter behind the engine port and shared adapter contract suite.
 - [ ] **VTL-005** Implement minimal REST API composition root and channel/runtime endpoints.
 - [ ] **VTL-006** Add architecture boundary checks and local developer documentation.

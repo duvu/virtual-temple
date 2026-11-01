@@ -13,7 +13,7 @@
 |---|---|---|---|
 | Task 1: pnpm TypeScript workspace | VTL-001 | Complete | Commit `2c01310`; `pnpm install`, `pnpm install --frozen-lockfile`, manifest assertions, ignore checks, and `git diff --check` passed; spec and quality reviews passed. |
 | Task 2: domain contracts | VTL-002 | Complete | Commits `dadb9d4` through `1d51272`; `pnpm --filter @vtl/domain test` (4 passed), `typecheck`, and `build` passed in integrated workspace; spec and final quality reviews passed. |
-| Task 3: application lifecycle | VTL-003 | Not started | — |
+| Task 3: application lifecycle | VTL-003 | Complete | Commits `8e5f342`, `9c63a53`; application tests (9 passed), typecheck, build, and frozen-lockfile install passed in integrated workspace; spec and final quality reviews passed. |
 | Task 4: Three.js adapter | VTL-004 | Not started | — |
 | Task 5: REST API | VTL-005 | Not started | — |
 | Task 6: boundaries and docs | VTL-006 | Not started | — |
