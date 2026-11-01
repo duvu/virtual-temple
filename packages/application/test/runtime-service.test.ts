@@ -75,6 +75,67 @@ describe('RuntimeService', () => {
     expect((await repository.get(runtimeId('r2')))?.status).toBe('READY');
   });
 
+  it('rejects duplicate runtime IDs without replacing existing state', async () => {
+    const { repository, service } = makeService();
+    await service.create({ runtimeId: runtimeId('r1'), channelId: channelId('c1'), worldId: worldId('world-1') });
+    await service.initialize(runtimeId('r1'), world);
+    await expect(service.create({ runtimeId: runtimeId('r1'), channelId: channelId('other'), worldId: worldId('world-1') }))
+      .rejects.toMatchObject({ code: 'RUNTIME_ALREADY_EXISTS' });
+    expect(await repository.get(runtimeId('r1'))).toMatchObject({ status: 'READY', channelId: 'c1' });
+  });
+
+  it('rejects initialization when the world ID does not match before adapter calls', async () => {
+    let calls = 0;
+    const engine = adapter({ initialize: async () => { calls += 1; }, loadWorld: async () => { calls += 1; } });
+    const { repository, service } = makeService(engine);
+    await service.create({ runtimeId: runtimeId('r1'), channelId: channelId('c1'), worldId: worldId('world-1') });
+    await expect(service.initialize(runtimeId('r1'), { ...world, worldId: worldId('other') }))
+      .rejects.toMatchObject({ code: 'RUNTIME_WORLD_MISMATCH' });
+    expect(calls).toBe(0);
+    expect((await repository.get(runtimeId('r1')))?.status).toBe('CREATED');
+  });
+
+  it('serializes concurrent duplicate starts for one runtime', async () => {
+    let startCalls = 0;
+    const engine = adapter({ start: async () => { startCalls += 1; } });
+    const { repository, service } = makeService(engine);
+    await service.create({ runtimeId: runtimeId('r1'), channelId: channelId('c1'), worldId: worldId('world-1') });
+    await service.initialize(runtimeId('r1'), world);
+    const results = await Promise.allSettled([service.start(runtimeId('r1')), service.start(runtimeId('r1'))]);
+    expect(startCalls).toBe(1);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect((await repository.get(runtimeId('r1')))?.status).toBe('RUNNING');
+  });
+
+  it('serializes start and stop while allowing a different runtime to proceed', async () => {
+    let releaseStart!: () => void;
+    let markStarted!: () => void;
+    const startGate = new Promise<void>((resolve) => { releaseStart = resolve; });
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let stopCalls = 0;
+    const engine = adapter({
+      start: async (id) => { if (id === runtimeId('r1')) { markStarted(); await startGate; } },
+      stop: async () => { stopCalls += 1; },
+    });
+    const { repository, service } = makeService(engine);
+    await service.create({ runtimeId: runtimeId('r1'), channelId: channelId('c1'), worldId: worldId('world-1') });
+    await service.create({ runtimeId: runtimeId('r2'), channelId: channelId('c2'), worldId: worldId('world-1') });
+    await service.initialize(runtimeId('r1'), world);
+    await service.initialize(runtimeId('r2'), world);
+    const starting = service.start(runtimeId('r1'));
+    await started;
+    const stopping = service.stop(runtimeId('r1'));
+    await service.start(runtimeId('r2'));
+    await Promise.resolve();
+    expect(stopCalls).toBe(0);
+    releaseStart();
+    await Promise.all([starting, stopping]);
+    expect(stopCalls).toBe(1);
+    expect((await repository.get(runtimeId('r1')))?.status).toBe('STOPPED');
+    expect((await repository.get(runtimeId('r2')))?.status).toBe('RUNNING');
+  });
+
   it('does not expose mutable repository state before save', async () => {
     const { repository, service } = makeService();
     await service.create({ runtimeId: runtimeId('r1'), channelId: channelId('c1'), worldId: worldId('world-1') });

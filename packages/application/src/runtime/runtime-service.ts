@@ -7,7 +7,7 @@ import {
   type RuntimeStatus,
   type World,
 } from '@vtl/domain';
-import { asAdapterFailure } from '../errors.js';
+import { asAdapterFailure, RuntimeAlreadyExistsError, RuntimeWorldMismatchError } from '../errors.js';
 import type { EngineAdapter } from '../ports/engine-adapter.js';
 import type { RuntimeRecord, RuntimeRepository } from '../ports/runtime-repository.js';
 import { assertRuntimeTransition } from './transitions.js';
@@ -19,6 +19,8 @@ export interface CreateRuntimeInput {
 }
 
 export class RuntimeService {
+  private readonly runtimeQueues = new Map<RuntimeId, Promise<void>>();
+
   constructor(
     private readonly adapter: EngineAdapter,
     private readonly repository: RuntimeRepository,
@@ -26,29 +28,39 @@ export class RuntimeService {
   ) {}
 
   async create(input: CreateRuntimeInput): Promise<RuntimeRecord> {
-    const timestamp = this.now();
-    const record: RuntimeRecord = {
-      runtimeId: input.runtimeId, channelId: input.channelId, worldId: input.worldId,
-      status: 'CREATED', createdAt: timestamp, updatedAt: timestamp,
-    };
-    await this.repository.save(record);
-    return this.requireRuntime(input.runtimeId);
+    return this.withRuntimeLock(input.runtimeId, async () => {
+      if (await this.repository.get(input.runtimeId) !== undefined) {
+        throw new RuntimeAlreadyExistsError(input.runtimeId);
+      }
+      const timestamp = this.now();
+      const record: RuntimeRecord = {
+        runtimeId: input.runtimeId, channelId: input.channelId, worldId: input.worldId,
+        status: 'CREATED', createdAt: timestamp, updatedAt: timestamp,
+      };
+      await this.repository.save(record);
+      return this.requireRuntime(input.runtimeId);
+    });
   }
 
   async initialize(id: RuntimeId, world: World): Promise<RuntimeRecord> {
-    const runtime = await this.requireRuntime(id);
-    this.assertTransition(runtime.status, 'INITIALIZING');
-    this.assertCapability('runtime.initialize');
-    this.assertCapability('world.load');
-    const initializing = { ...runtime, status: 'INITIALIZING' as const, updatedAt: this.now() };
-    await this.persist(initializing);
-    try {
-      await this.adapter.initialize(id);
-      await this.adapter.loadWorld(id, world);
-    } catch (error) {
-      return this.fail(initializing, error);
-    }
-    return this.transition(initializing, 'READY');
+    return this.withRuntimeLock(id, async () => {
+      const runtime = await this.requireRuntime(id);
+      if (world.worldId !== runtime.worldId) {
+        throw new RuntimeWorldMismatchError(id, runtime.worldId, world.worldId);
+      }
+      this.assertTransition(runtime.status, 'INITIALIZING');
+      this.assertCapability('runtime.initialize');
+      this.assertCapability('world.load');
+      const initializing = { ...runtime, status: 'INITIALIZING' as const, updatedAt: this.now() };
+      await this.persist(initializing);
+      try {
+        await this.adapter.initialize(id);
+        await this.adapter.loadWorld(id, world);
+      } catch (error) {
+        return this.fail(initializing, error);
+      }
+      return this.transition(initializing, 'READY');
+    });
   }
 
   async start(id: RuntimeId): Promise<RuntimeRecord> {
@@ -73,15 +85,17 @@ export class RuntimeService {
     capability: EngineCapability,
     operation: (runtimeId: RuntimeId) => Promise<void>,
   ): Promise<RuntimeRecord> {
-    const runtime = await this.requireRuntime(id);
-    this.assertTransition(runtime.status, next);
-    this.assertCapability(capability);
-    try {
-      await operation(id);
-    } catch (error) {
-      return this.fail(runtime, error);
-    }
-    return this.transition(runtime, next);
+    return this.withRuntimeLock(id, async () => {
+      const runtime = await this.requireRuntime(id);
+      this.assertTransition(runtime.status, next);
+      this.assertCapability(capability);
+      try {
+        await operation(id);
+      } catch (error) {
+        return this.fail(runtime, error);
+      }
+      return this.transition(runtime, next);
+    });
   }
 
   private assertTransition(from: RuntimeStatus, to: RuntimeStatus): void {
@@ -118,5 +132,19 @@ export class RuntimeService {
     const runtime = await this.repository.get(id);
     if (runtime === undefined) throw new RuntimeNotFoundError(id);
     return runtime;
+  }
+
+  private async withRuntimeLock<T>(id: RuntimeId, operation: () => Promise<T>): Promise<T> {
+    const previous = this.runtimeQueues.get(id) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => { release = resolve; });
+    this.runtimeQueues.set(id, current);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.runtimeQueues.get(id) === current) this.runtimeQueues.delete(id);
+    }
   }
 }
