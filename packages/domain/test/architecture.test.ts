@@ -23,6 +23,9 @@ async function sourceFiles(directory: string): Promise<string[]> {
 
 function moduleSpecifiers(source: ts.SourceFile): string[] {
   const specifiers: string[] = [];
+  const addLiteral = (node: ts.Node): void => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) specifiers.push(node.text);
+  };
   const visit = (node: ts.Node): void => {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
       specifiers.push(node.moduleSpecifier.text);
@@ -32,9 +35,15 @@ function moduleSpecifiers(source: ts.SourceFile): string[] {
     }
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const [argument] = node.arguments;
-      if (argument && (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))) {
-        specifiers.push(argument.text);
-      }
+      if (argument) addLiteral(argument);
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+      const [argument] = node.arguments;
+      if (argument) addLiteral(argument);
+    }
+    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      const expression = node.moduleReference.expression;
+      if (expression) addLiteral(expression);
     }
     ts.forEachChild(node, visit);
   };
@@ -62,6 +71,21 @@ describe('architecture boundaries', () => {
 
     expect(imports).toEqual(['three']);
     expect(imports.filter(isEngineSdkImport)).toEqual(['three']);
+  });
+
+  it('detects CommonJS require and TypeScript import-equals engine dependencies', () => {
+    const fixture = [
+      "require('three');",
+      'require(`@react-three/fiber`);',
+      "import Unity = require('UnityEngine');",
+      'const engineId = require(`threejs`);',
+      "// require('unreal');",
+    ].join('\n');
+    const source = ts.createSourceFile('fixture.cts', fixture, ts.ScriptTarget.Latest, true);
+    const imports = moduleSpecifiers(source);
+
+    expect(imports).toEqual(['three', '@react-three/fiber', 'UnityEngine', 'threejs']);
+    expect(imports.filter(isEngineSdkImport)).toEqual(['three', '@react-three/fiber', 'UnityEngine']);
   });
 
   it('keeps domain and application source independent from engine SDK imports', async () => {
