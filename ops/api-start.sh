@@ -193,7 +193,7 @@ fi
 
 pid_tmp="$(mktemp "${VTL_RUN_DIR}/api.pid.XXXXXXXX")"
 cd -- "${VTL_ROOT}"
-node apps/api/dist/server.js 9>&- >>"${log_file}" 2>&1 </dev/null &
+nohup node apps/api/dist/server.js 9>&- >>"${log_file}" 2>&1 </dev/null &
 api_pid=$!
 printf '%s\n' "${api_pid}" > "${pid_tmp}"
 mv -f -- "${pid_tmp}" "${pid_file}"

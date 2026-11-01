@@ -30,6 +30,34 @@ Build, typecheck, and test run the matching script recursively in workspace pack
 
 The API listens on `http://localhost:3000` by default. Set `PORT` to change the port.
 
+## Operations scripts
+
+Run these executable helpers from any working directory; each locates the repository root from its own path.
+
+| Script | Operation |
+|---|---|
+| `ops/install.sh` | Install the pinned workspace dependencies from the lockfile. |
+| `ops/build.sh` | Build all workspace packages. |
+| `ops/verify.sh` | Run frozen install, build, typecheck, and tests in order. |
+| `ops/dev.sh` | Run the foreground API development server. |
+| `ops/health.sh [timeout-seconds]` | Request `/healthz`; the optional timeout defaults to 5 seconds. |
+| `ops/demo-channel.sh` | Create a demo channel/runtime, initialize and start it, then print the runtime state. |
+| `ops/api-start.sh` | Build and start the API as a background process. |
+| `ops/api-status.sh` | Report whether the managed API process is healthy. |
+| `ops/api-stop.sh` | Gracefully stop the managed API process. |
+| `ops/api-restart.sh` | Stop and start the managed API process. |
+
+All scripts use `PORT` (default `3000`) or `VTL_BASE_URL` for the API address. For example:
+
+```sh
+ops/api-start.sh
+ops/api-status.sh
+ops/demo-channel.sh
+ops/api-stop.sh
+```
+
+The managed API process writes its PID and log to `.run/api.pid` and `.run/api.log`; `.run/` is ignored by git. Demo channels and runtimes live only in API memory and disappear when the API process stops. Process-control scripts require Linux `/proc` and Bash 4.4+; `api-start`, `api-stop`, and `api-restart` also require `flock`. The health checks require `curl`. The foreground developer server and other wrappers require Bash, Node.js, and pnpm as applicable.
+
 ## API routes
 
 - `GET /healthz` returns `{ "status": "ok" }`.
