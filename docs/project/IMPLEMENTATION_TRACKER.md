@@ -11,7 +11,7 @@
 
 | Plan task | Backlog item | Status | Evidence |
 |---|---|---|---|
-| Task 1: pnpm TypeScript workspace | VTL-001 | Not started | — |
+| Task 1: pnpm TypeScript workspace | VTL-001 | Complete | Commit `2c01310`; `pnpm install`, `pnpm install --frozen-lockfile`, manifest assertions, ignore checks, and `git diff --check` passed; spec and quality reviews passed. |
 | Task 2: domain contracts | VTL-002 | Not started | — |
 | Task 3: application lifecycle | VTL-003 | Not started | — |
 | Task 4: Three.js adapter | VTL-004 | Not started | — |

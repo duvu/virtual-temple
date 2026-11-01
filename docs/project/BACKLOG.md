@@ -4,7 +4,7 @@ This backlog is ordered by prerequisite and delivery priority. Items are not com
 
 ## P0 — Architectural Foundation
 
-- [ ] **VTL-001** Establish pnpm TypeScript workspace and root scripts.
+- [x] **VTL-001** Establish pnpm TypeScript workspace and root scripts.
 - [ ] **VTL-002** Define engine-independent channel, world, normalized event, command, capability, and runtime contracts.
 - [ ] **VTL-003** Implement runtime lifecycle orchestration and in-memory runtime repository.
 - [ ] **VTL-004** Implement Three.js adapter behind the engine port and shared adapter contract suite.
