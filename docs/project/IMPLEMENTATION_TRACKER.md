@@ -21,7 +21,7 @@
 
 ## Verification Log
 
-Task 7 verification was run from the integration worktree root. All commands exited successfully except the expected SIGINT status from stopping the live dev server gracefully.
+Final verification was rerun from the merged `master` checkout. All commands exited successfully except the expected SIGINT status from stopping the live dev server gracefully.
 
 | Date | Command | Result | Notes |
 |---|---|---|---|
@@ -29,7 +29,7 @@ Task 7 verification was run from the integration worktree root. All commands exi
 | 2026-11-01 | `pnpm build` | PASS (exit 0) | All five buildable workspace packages completed. |
 | 2026-11-01 | `pnpm typecheck` | PASS (exit 0) | Typecheck completed in all five workspace packages; workspace package imports resolved. |
 | 2026-11-01 | `pnpm test` | PASS (exit 0; 50 tests) | Domain 7 (including 3 architecture-boundary tests), application 9, adapter contract harness 13, Three.js adapter 6, API 15. API coverage includes independent runtime state and explicit `UNSUPPORTED_CAPABILITY` responses. Shared adapter contract suite exercises each declared operation and explicit unsupported-capability errors. |
-| 2026-11-01 | `PORT=50603 pnpm dev` | PASS (server started; stopped with SIGINT) | Started API using documented `PORT` setting. `curl --retry 10 --retry-connrefused --retry-delay 1 --silent --show-error --write-out '\nHTTP_STATUS=%{http_code}\n' http://127.0.0.1:50603/healthz` returned `{"status":"ok"}` and `HTTP_STATUS=200`. Sent Ctrl-C to stop gracefully. |
+| 2026-11-01 | `PORT=50604 pnpm dev` | PASS (server started; stopped with SIGINT) | On merged `master`, started API using documented `PORT` setting. `curl --retry 10 --retry-connrefused --retry-delay 1 --silent --show-error --write-out '\nHTTP_STATUS=%{http_code}\n' http://127.0.0.1:50604/healthz` returned `{"status":"ok"}` and `HTTP_STATUS=200`. Sent Ctrl-C to stop gracefully. |
 | 2026-11-01 | `pnpm install --frozen-lockfile`; `pnpm build`; `pnpm typecheck`; `pnpm test`; live `GET /healthz` | PASS | Quality gates reviewed: architecture boundary test confirms domain/application are free of engine SDK imports; Three.js implementation is isolated in `packages/engine-threejs`; adapter contract coverage and runtime isolation/capability-error API coverage passed. Crash recovery is deferred from P0 (VTL-302), not claimed as verified. |
 
 ## Risks and Decisions
