@@ -53,8 +53,27 @@ publish_startup_pid() {
   pid_tmp=""
 }
 
+startup_job_is_running() {
+  local candidate
+  local -a running_jobs=()
+  mapfile -t running_jobs < <(jobs -pr)
+  for candidate in "${running_jobs[@]}"; do
+    [[ "${candidate}" != "${1}" ]] || return 0
+  done
+  return 1
+}
+
+clear_exited_startup_child() {
+  local current_pid=""
+  wait "${api_pid}" 2>/dev/null || true
+  IFS= read -r current_pid < "${pid_file}" || true
+  [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
+  [[ -z "${pid_tmp}" ]] || rm -f -- "${pid_tmp}"
+  pid_tmp=""
+}
+
 cleanup_startup_child() {
-  local identity_status second
+  local identity_status attempt second
   local -a startup_jobs=()
   if [[ -z "${api_pid}" ]]; then
     # Bash records the async job before delivering a pending trap, even if it
@@ -68,52 +87,51 @@ cleanup_startup_child() {
     return 0
   fi
 
-  set +e
-  vtl_pid_is_api_process "${api_pid}"
-  identity_status=$?
-  set -e
-  if (( identity_status == 0 )); then
-    # Revalidate immediately before signaling to reduce the PID-reuse window.
+  # Only signal a PID Bash still recognizes as this script's running job.
+  # During fork/exec, retry /proc identity briefly while checking ownership.
+  for ((attempt = 0; attempt < 5; attempt++)); do
+    if ! startup_job_is_running "${api_pid}"; then
+      clear_exited_startup_child
+      return 0
+    fi
     set +e
     vtl_pid_is_api_process "${api_pid}"
     identity_status=$?
     set -e
-    if (( identity_status == 0 )); then
-      if ! kill -TERM "${api_pid}"; then
-        printf 'Could not TERM managed API child %s.\n' "${api_pid}" >&2
-        return 1
-      fi
-    fi
+    (( identity_status == 0 )) && break
+    sleep 0.1
+  done
+
+  if ! startup_job_is_running "${api_pid}"; then
+    clear_exited_startup_child
+    return 0
   fi
 
-  if (( identity_status != 0 )) && kill -0 "${api_pid}" 2>/dev/null; then
-    printf 'Cannot safely signal PID %s; leaving its process and PID state untouched.\n' "${api_pid}" >&2
+  # Even if /proc is not ready yet, the exact PID is still a running direct
+  # background child in this shell's job table, so TERM cannot target a stale
+  # $! value or an unrelated process.
+  if ! kill -TERM "${api_pid}"; then
+    if ! startup_job_is_running "${api_pid}"; then
+      clear_exited_startup_child
+      return 0
+    fi
+    printf 'Could not TERM directly owned startup child %s.\n' "${api_pid}" >&2
+    publish_startup_pid || true
     return 1
   fi
 
   for ((second = 0; second < 15; second++)); do
-    if ! kill -0 "${api_pid}" 2>/dev/null; then
-      wait "${api_pid}" 2>/dev/null || true
-      local current_pid=""
-      IFS= read -r current_pid < "${pid_file}" || true
-      [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
-      [[ -z "${pid_tmp}" ]] || rm -f -- "${pid_tmp}"
-      pid_tmp=""
+    if ! startup_job_is_running "${api_pid}"; then
+      clear_exited_startup_child
       return 0
     fi
     sleep 1
   done
 
-  if ! kill -0 "${api_pid}" 2>/dev/null; then
-    wait "${api_pid}" 2>/dev/null || true
-    local current_pid=""
-    IFS= read -r current_pid < "${pid_file}" || true
-    [[ "${current_pid}" != "${api_pid}" ]] || rm -f -- "${pid_file}"
-    [[ -z "${pid_tmp}" ]] || rm -f -- "${pid_tmp}"
-    pid_tmp=""
+  if ! startup_job_is_running "${api_pid}"; then
+    clear_exited_startup_child
     return 0
   fi
-
   if ! publish_startup_pid; then
     printf 'Startup child %s remains alive; PID file/temp state retained for manual stop.\n' "${api_pid}" >&2
     return 1
