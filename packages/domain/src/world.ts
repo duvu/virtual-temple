@@ -1,7 +1,5 @@
 import type { WorldId } from './ids.js';
-
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+import type { JsonValue } from './json.js';
 
 export interface CharacterPlacement {
   readonly characterId: string;

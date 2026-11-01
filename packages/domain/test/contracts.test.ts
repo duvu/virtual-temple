@@ -4,10 +4,25 @@ import {
   DomainError, ENGINE_CAPABILITIES, EventId, NormalizedEvent, PlatformId, PlatformUserId,
   RuntimeCommand, RuntimeId, RuntimeNotFoundError, RUNTIME_STATUSES, SceneConfiguration,
   UnsupportedCapabilityError, World, WorldId, channelId, commandId, correlationId, eventId,
-  platformId, platformUserId, runtimeId, worldId,
+  platformId, platformUserId, runtimeId, worldId, assertJsonValue,
 } from '../src/index.js';
 
 describe('engine-independent domain contracts', () => {
+  it('validates JSON payloads before serialization', () => {
+    expect(() => assertJsonValue({ value: Number.NaN })).toThrow(/finite/);
+    expect(() => assertJsonValue({ value: Number.POSITIVE_INFINITY })).toThrow(/finite/);
+    expect(() => assertJsonValue({ value: Number.NEGATIVE_INFINITY })).toThrow(/finite/);
+    expect(() => assertJsonValue({ value: undefined })).toThrow(/undefined/);
+    expect(() => assertJsonValue({ value: () => 'nope' })).toThrow(/function/);
+    expect(() => assertJsonValue(Symbol('nope'))).toThrow(/symbol/);
+    expect(() => assertJsonValue(1n)).toThrow(/bigint/);
+    expect(() => assertJsonValue(new Date())).toThrow(/plain object/);
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    expect(() => assertJsonValue(cyclic)).toThrow(/cycle/);
+    expect(() => assertJsonValue({ nested: [1, 'two', null] })).not.toThrow();
+  });
+
   it('constructs channel and world models using logical asset and animation identifiers', () => {
     const placement: CharacterPlacement = { characterId: 'host', assetId: 'asset-host', initialAnimationId: 'greet' };
     const scene: SceneConfiguration = {

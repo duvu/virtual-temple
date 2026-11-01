@@ -1,11 +1,12 @@
 import type { ChannelId, CommandId, CorrelationId, RuntimeId } from './ids.js';
-import type { JsonValue } from './world.js';
+import type { JsonValue } from './json.js';
 
 export interface RuntimeCommand {
   readonly commandId: CommandId;
   readonly channelId: ChannelId;
   readonly runtimeId: RuntimeId;
   readonly commandType: string;
+  /** Must pass assertJsonValue before serialization. */
   readonly payload: JsonValue;
   readonly timestamp: string;
   readonly correlationId: CorrelationId;
