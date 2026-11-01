@@ -35,6 +35,7 @@ describe('engine-independent domain contracts', () => {
     Object.defineProperty(arrayGetter, '0', { enumerable: true, get: () => 1 });
     arrayGetter.length = 1;
     expect(() => assertJsonValue(arrayGetter)).toThrow(/accessor/);
+    expect(() => assertJsonValue(new Array(0xffff_ffff))).toThrow(/hole/);
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;
     expect(() => assertJsonValue(cyclic)).toThrow(/cycle/);

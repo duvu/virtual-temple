@@ -34,6 +34,7 @@ export function assertJsonValue(value: unknown): asserts value is JsonValue {
     active.add(object);
     try {
       if (Array.isArray(current)) {
+        const indices: number[] = [];
         for (const key of Object.getOwnPropertyNames(current)) {
           if (key === 'length') continue;
           const index = Number(key);
@@ -42,11 +43,14 @@ export function assertJsonValue(value: unknown): asserts value is JsonValue {
             && index < 0xffff_ffff
             && String(index) === key;
           if (!isCanonicalArrayIndex) throw new TypeError(`Unexpected array property ${key} at ${path}`);
-          ownDataValue(current, key, path);
+          indices.push(index);
         }
-        for (let index = 0; index < current.length; index += 1) {
+        if (indices.length !== current.length) throw new TypeError(`Unexpected array hole at ${path}`);
+        indices.sort((left, right) => left - right);
+        for (let offset = 0; offset < indices.length; offset += 1) {
+          const index = indices[offset];
+          if (index !== offset) throw new TypeError(`Unexpected array hole at ${path}[${offset}]`);
           const key = String(index);
-          if (!Object.hasOwn(current, key)) throw new TypeError(`Unexpected array hole at ${path}[${index}]`);
           visit(ownDataValue(current, key, path), `${path}[${index}]`);
         }
         return;
