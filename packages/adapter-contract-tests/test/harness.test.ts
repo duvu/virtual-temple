@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EngineAdapter, type EngineHealthStatus, type EnginePerformanceStatus } from '@vtl/application';
-import { runtimeId, UnsupportedCapabilityError } from '@vtl/domain';
+import {
+  ENGINE_CAPABILITIES, runtimeId, UnsupportedCapabilityError,
+  type CharacterPlacement, type JsonValue, type RuntimeId, type RuntimeStatus,
+} from '@vtl/domain';
 import { defineEngineAdapterContract } from '../src/index.js';
 
 class MinimalAdapter extends EngineAdapter {
@@ -12,8 +15,33 @@ class MinimalAdapter extends EngineAdapter {
   async getPerformance(): Promise<EnginePerformanceStatus> { return { checks: 1 }; }
 }
 
+class AllOperationsAdapter extends MinimalAdapter {
+  readonly engineId = 'all-operations';
+  readonly capabilities = new Set(ENGINE_CAPABILITIES);
+  private readonly statuses = new Map<RuntimeId, RuntimeStatus>();
+
+  override async initialize(id: RuntimeId): Promise<void> { this.statuses.set(id, 'READY'); }
+  override async loadWorld(_id: RuntimeId, _world: Parameters<EngineAdapter['loadWorld']>[1]): Promise<void> {}
+  override async start(id: RuntimeId): Promise<void> { this.statuses.set(id, 'RUNNING'); }
+  override async stop(id: RuntimeId): Promise<void> { this.statuses.set(id, 'STOPPED'); }
+  override async pause(id: RuntimeId): Promise<void> { this.statuses.set(id, 'PAUSED'); }
+  override async resume(id: RuntimeId): Promise<void> { this.statuses.set(id, 'RUNNING'); }
+  override async setCamera(_id: RuntimeId, _camera: JsonValue): Promise<void> {}
+  override async spawnCharacter(_id: RuntimeId, _character: CharacterPlacement): Promise<void> {}
+  override async despawnCharacter(_id: RuntimeId, _characterId: string): Promise<void> {}
+  override async moveCharacter(_id: RuntimeId, _characterId: string, _position: CharacterPlacement['position']): Promise<void> {}
+  override async playAnimation(_id: RuntimeId, _characterId: string, _animationId: string): Promise<void> {}
+  override async stopAnimation(_id: RuntimeId, _characterId: string): Promise<void> {}
+  override async showEffect(_id: RuntimeId, _effect: JsonValue): Promise<void> {}
+  override async setEnvironment(_id: RuntimeId, _environment: JsonValue): Promise<void> {}
+  override async getRuntimeStatus(id: RuntimeId): Promise<RuntimeStatus> { return this.statuses.get(id) ?? 'CREATED'; }
+  override async captureOutput(_id: RuntimeId): Promise<JsonValue> { return {}; }
+}
+
 describe('defineEngineAdapterContract', () => {
   defineEngineAdapterContract('minimal test adapter', () => new MinimalAdapter());
+  defineEngineAdapterContract('all-operations test adapter', () => new AllOperationsAdapter());
+
   it('runs reusable checks for its factory', () => {
     expect(new MinimalAdapter()).toBeInstanceOf(EngineAdapter);
   });

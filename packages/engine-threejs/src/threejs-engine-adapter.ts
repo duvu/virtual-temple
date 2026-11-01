@@ -6,6 +6,7 @@ interface RuntimeInstance {
   readonly scene: Scene;
   status: RuntimeStatus;
   world?: World;
+  worldRoot?: Group;
 }
 
 /** Minimal headless Three.js adapter: owns one real Scene graph per runtime. */
@@ -34,11 +35,11 @@ export class ThreeJsEngineAdapter extends EngineAdapter {
 
   async loadWorld(id: RuntimeId, world: World): Promise<void> {
     const runtime = this.getRuntime(id);
-    const priorGroup = runtime.scene.getObjectByName(world.scene.sceneId);
-    if (priorGroup) runtime.scene.remove(priorGroup);
+    if (runtime.worldRoot) runtime.scene.remove(runtime.worldRoot);
     const worldRoot = new Group();
     worldRoot.name = world.scene.sceneId;
     runtime.scene.add(worldRoot);
+    runtime.worldRoot = worldRoot;
     runtime.world = world;
   }
 

@@ -18,9 +18,10 @@ describe('ThreeJsEngineAdapter scene registry', () => {
     await adapter.initialize(first);
     await adapter.initialize(second);
     await adapter.loadWorld(first, world);
+    await adapter.loadWorld(first, { ...world, scene: { ...world.scene, sceneId: 'replacement-scene' } });
     expect(adapter.getScene(first)).not.toBe(adapter.getScene(second));
     expect(adapter.getScene(first)?.children).toHaveLength(1);
-    expect(adapter.getScene(first)?.children[0]?.name).toBe('scene');
+    expect(adapter.getScene(first)?.children[0]?.name).toBe('replacement-scene');
     expect(adapter.getScene(second)?.children).toHaveLength(0);
   });
 });
