@@ -15,8 +15,8 @@
 | Task 2: domain contracts | VTL-002 | Complete | Commits `dadb9d4` through `1d51272`; `pnpm --filter @vtl/domain test` (4 passed), `typecheck`, and `build` passed in integrated workspace; spec and final quality reviews passed. |
 | Task 3: application lifecycle | VTL-003 | Complete | Commits `8e5f342`, `9c63a53`; application tests (9 passed), typecheck, build, and frozen-lockfile install passed in integrated workspace; spec and final quality reviews passed. |
 | Task 4: Three.js adapter | VTL-004 | Complete | Commits `c2bb81a` through `3b24546`; frozen install, build, typecheck, and full test suite passed (32 tests); spec and final quality reviews passed, including no-dist engine test. |
-| Task 5: REST API | VTL-005 | Not started | — |
-| Task 6: boundaries and docs | VTL-006 | In progress | Boundary test commits `670a31c` through `5e3a6df`; `pnpm --filter @vtl/domain test` (7 passed), typecheck, and build passed; spec/quality reviews passed. README local execution docs are being completed with Task 5 to avoid concurrent README edits. |
+| Task 5: REST API | VTL-005 | Complete | Commits `91beef2` through `d41cf52`; integrated `pnpm install --frozen-lockfile`, build, typecheck, and test passed; 12 API tests passed; live `/healthz` returned 200 in agent verification; spec and final quality reviews passed. |
+| Task 6: boundaries and docs | VTL-006 | Complete | Boundary test commits `670a31c` through `5e3a6df`; `pnpm --filter @vtl/domain test` (7 passed), typecheck/build passed; README docs completed in Task 5; spec and final quality reviews passed. |
 | Task 7: full verification | VTL-007 | Not started | — |
 
 ## Verification Log
