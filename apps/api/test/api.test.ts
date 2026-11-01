@@ -125,6 +125,8 @@ describe('API', () => {
     expect(response.body).not.toContain('secret stack detail');
     const persisted = await app.inject(`/runtimes/${id}`);
     expect(persisted.statusCode).toBe(200);
+    expect(persisted.json().status).toBe('ERROR');
+    expect(persisted.json().error).toEqual({ code: 'ADAPTER_FAILURE', message: 'Adapter operation failed' });
     expect(persisted.body).not.toContain('secret stack detail');
     expect(persisted.body).not.toContain('stack');
     await app.close();
