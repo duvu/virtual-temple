@@ -34,6 +34,7 @@ The API listens on `http://localhost:3000` by default. Set `PORT` to change the 
 
 - `GET /healthz` returns `{ "status": "ok" }`.
 - `POST /channels` creates a channel and its in-memory world. Send `{ "name": "Temple", "world": { "name": "Main world" } }`; `engineId` is optional and defaults to `threejs`.
+- When a world repeats values at its top level and under `scene`, top-level `environment`, `camera`, `characters`, `lighting`, `audio`, and `effects` take precedence; absent top-level values fall back to `scene`. The API stores matching normalized values at both levels.
 - `GET /channels` lists channels.
 - `POST /channels/:channelId/runtimes` creates a runtime for that channel.
 - `POST /runtimes/:runtimeId/actions` accepts `{ "action": "initialize" | "start" | "pause" | "resume" | "stop" }`.

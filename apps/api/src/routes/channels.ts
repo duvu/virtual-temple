@@ -9,7 +9,7 @@ const jsonSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
   z.string(), z.number().finite(), z.boolean(), z.null(), z.array(jsonSchema),
   z.record(z.string(), jsonSchema),
 ]));
-const vectorSchema = z.object({ x: z.number(), y: z.number(), z: z.number() });
+const vectorSchema = z.object({ x: z.number().finite(), y: z.number().finite(), z: z.number().finite() });
 const characterSchema = z.object({
   characterId: z.string().min(1), assetId: z.string().min(1), position: vectorSchema.optional(),
   rotation: vectorSchema.optional(), scale: vectorSchema.optional(), initialAnimationId: z.string().optional(),
@@ -30,19 +30,21 @@ export async function registerChannelRoutes(app: FastifyInstance, channels: Chan
     if (engineId !== adapterEngineId) throw new ChannelEngineMismatchError();
     const id = channelId(randomUUID());
     const worldKey = worldId(randomUUID());
+    const environment = input.world.environment ?? input.world.scene?.environment ?? {};
+    const camera = input.world.camera ?? input.world.scene?.camera ?? {};
     const characters = input.world.characters ?? input.world.scene?.characters ?? [];
     const assetIds = input.world.assetIds ?? input.world.scene?.assetIds ?? [];
+    const lighting = input.world.lighting ?? input.world.scene?.lighting ?? {};
+    const audio = input.world.audio ?? input.world.scene?.audio ?? {};
+    const effects = input.world.effects ?? input.world.scene?.effects ?? {};
     const sceneId = input.world.scene?.sceneId ?? randomUUID();
     const world: World = {
       worldId: worldKey, name: input.world.name,
-      environment: input.world.environment ?? {},
+      environment,
       scene: {
-        sceneId, environment: input.world.scene?.environment, assetIds,
-        camera: input.world.scene?.camera, characters,
-        lighting: input.world.scene?.lighting, audio: input.world.scene?.audio, effects: input.world.scene?.effects,
+        sceneId, environment, assetIds, camera, characters, lighting, audio, effects,
       },
-      assetIds, camera: input.world.camera ?? {}, characters,
-      lighting: input.world.lighting ?? {}, audio: input.world.audio ?? {}, effects: input.world.effects ?? {},
+      assetIds, camera, characters, lighting, audio, effects,
     };
     const channel = { channelId: id, name: input.name, worldId: worldKey, engineId, destinations: [], scheduleReferences: [] };
     await channels.save({ channel, world });

@@ -11,10 +11,11 @@ class TestAdapter extends EngineAdapter {
   readonly adapterVersion = '1';
   readonly capabilities = new Set<EngineCapability>(['runtime.initialize', 'world.load', 'runtime.start', 'runtime.pause', 'runtime.resume', 'runtime.stop', 'runtime.status']);
   readonly initializedWorlds: string[] = [];
+  readonly loadedWorlds: World[] = [];
   async getHealth() { return { healthy: true }; }
   async getPerformance() { return { runtimeCount: 0 }; }
   async initialize(_id: RuntimeId) {}
-  async loadWorld(_id: RuntimeId, world: World) { this.initializedWorlds.push(world.worldId); }
+  async loadWorld(_id: RuntimeId, world: World) { this.initializedWorlds.push(world.worldId); this.loadedWorlds.push(world); }
   async start(_id: RuntimeId) {}
   async pause(_id: RuntimeId) {}
   async resume(_id: RuntimeId) {}
@@ -51,6 +52,42 @@ describe('API', () => {
     const listed = await app.inject('/channels');
     expect(listed.json()).toHaveLength(1);
     expect(listed.json()[0]).toMatchObject({ channelId: created.channelId, worldId: created.worldId, name: 'Temple' });
+    await app.close();
+  });
+
+  it('rejects non-finite character coordinates from raw JSON', async () => {
+    const app = makeApp();
+    const response = await app.inject({
+      method: 'POST', url: '/channels', headers: { 'content-type': 'application/json' },
+      payload: '{"name":"Bad coordinate","world":{"name":"Bad world","characters":[{"characterId":"c1","assetId":"a1","position":{"x":1e400,"y":0,"z":0}}]}}',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request' } });
+    await app.close();
+  });
+
+  it('normalizes duplicate world fields with top-level values taking precedence', async () => {
+    const adapter = new TestAdapter();
+    const app = makeApp(adapter);
+    const response = await app.inject({
+      method: 'POST', url: '/channels',
+      payload: {
+        name: 'Normalized',
+        world: {
+          name: 'Normalized world', environment: { source: 'top' }, camera: { source: 'top' },
+          scene: { environment: { source: 'scene' }, camera: { source: 'scene' } },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const runtime = await app.inject({ method: 'POST', url: `/channels/${response.json().channelId}/runtimes` });
+    const runtimeId = runtime.json().runtimeId;
+    const initialized = await app.inject({ method: 'POST', url: `/runtimes/${runtimeId}/actions`, payload: { action: 'initialize' } });
+    expect(initialized.statusCode).toBe(200);
+    expect(adapter.loadedWorlds[0]).toMatchObject({
+      environment: { source: 'top' }, camera: { source: 'top' },
+      scene: { environment: { source: 'top' }, camera: { source: 'top' } },
+    });
     await app.close();
   });
 
