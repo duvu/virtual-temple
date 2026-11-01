@@ -3,6 +3,7 @@ import { EngineAdapter, InMemoryRuntimeRepository } from '@vtl/application';
 import { channelId, worldId, type EngineCapability, type RuntimeId, type RuntimeStatus, type World } from '@vtl/domain';
 import { buildApp } from '../src/app.js';
 import { InMemoryChannelRepository } from '../src/channel-repository.js';
+import { requireJsonContentType, UnsupportedMediaTypeError } from '../src/http-errors.js';
 
 class TestAdapter extends EngineAdapter {
   readonly engineId = 'test';
@@ -31,6 +32,11 @@ async function createChannel(app: Awaited<ReturnType<typeof makeApp>>, name: str
 }
 
 describe('API', () => {
+  it('accepts JSON with charset parameters and rejects other JSON media types', () => {
+    expect(() => requireJsonContentType('application/json; charset=utf-8')).not.toThrow();
+    expect(() => requireJsonContentType('application/problem+json')).toThrow(UnsupportedMediaTypeError);
+  });
+
   it('reports health', async () => {
     const app = makeApp();
     const response = await app.inject('/healthz');
@@ -105,6 +111,10 @@ describe('API', () => {
     expect(unsupported.statusCode).toBe(415);
     expect(unsupported.json()).toEqual({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' } });
     expect(unsupported.body).not.toContain('secret body');
+
+    const customJson = await app.inject({ method: 'POST', url: '/channels', headers: { 'content-type': 'application/problem+json' }, payload: '{"detail":"private"}' });
+    expect(customJson.statusCode).toBe(415);
+    expect(customJson.json()).toEqual({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' } });
 
     const oversized = await app.inject({ method: 'POST', url: '/channels', headers: { 'content-type': 'application/json' }, payload: ' '.repeat(1_048_577) });
     expect(oversized.statusCode).toBe(413);

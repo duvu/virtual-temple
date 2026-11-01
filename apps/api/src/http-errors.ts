@@ -17,7 +17,7 @@ export class UnsupportedMediaTypeError extends Error {
 
 export function requireJsonContentType(contentType: string | undefined): void {
   const mediaType = contentType?.split(';', 1)[0]?.trim().toLowerCase();
-  if (mediaType !== 'application/json' && !/^application\/[a-z0-9.+-]+\+json$/.test(mediaType ?? '')) {
+  if (mediaType !== 'application/json') {
     throw new UnsupportedMediaTypeError();
   }
 }
