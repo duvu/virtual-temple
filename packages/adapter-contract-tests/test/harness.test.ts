@@ -4,7 +4,7 @@ import {
   ENGINE_CAPABILITIES, runtimeId, UnsupportedCapabilityError,
   type CharacterPlacement, type JsonValue, type RuntimeId, type RuntimeStatus,
 } from '@vtl/domain';
-import { defineEngineAdapterContract } from '../src/index.js';
+import { assertEngineAdapterCapabilityPrerequisites, defineEngineAdapterContract } from '../src/engine-adapter-contract.js';
 
 class MinimalAdapter extends EngineAdapter {
   readonly engineId = 'minimal';
@@ -56,6 +56,15 @@ class AllOperationsAdapter extends MinimalAdapter {
 describe('defineEngineAdapterContract', () => {
   defineEngineAdapterContract('minimal test adapter', () => new MinimalAdapter());
   defineEngineAdapterContract('all-operations test adapter', () => new AllOperationsAdapter());
+
+  it('rejects declared capabilities whose prerequisites are absent', () => {
+    expect(() => assertEngineAdapterCapabilityPrerequisites(new Set(['runtime.pause'])))
+      .toThrow(/runtime.pause.*runtime.initialize.*runtime.start/);
+    expect(() => assertEngineAdapterCapabilityPrerequisites(new Set(['runtime.initialize', 'runtime.start', 'runtime.resume'])))
+      .toThrow(/runtime.resume.*runtime.pause/);
+    expect(() => assertEngineAdapterCapabilityPrerequisites(new Set(['runtime.status'])))
+      .toThrow(/runtime.status.*runtime.initialize/);
+  });
 
   it('runs reusable checks for its factory', () => {
     expect(new MinimalAdapter()).toBeInstanceOf(EngineAdapter);

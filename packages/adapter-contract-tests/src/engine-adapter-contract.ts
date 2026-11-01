@@ -26,14 +26,31 @@ function operations(adapter: EngineAdapter, id: ReturnType<typeof runtimeId>): r
   ];
 }
 
-/** Only invoke runtime-scoped operations when the adapter declares initialization. */
-function canInvokeWithDeclaredPrerequisites(capability: EngineCapability, capabilities: ReadonlySet<EngineCapability>): boolean {
-  if (!capabilities.has(capability)) return false;
-  if (capability === 'runtime.initialize') return true;
-  if (!capabilities.has('runtime.initialize')) return false;
-  if (capability === 'runtime.pause') return capabilities.has('runtime.start');
-  if (capability === 'runtime.resume') return capabilities.has('runtime.start') && capabilities.has('runtime.pause');
-  return true;
+const CAPABILITY_PREREQUISITES: Partial<Record<EngineCapability, readonly EngineCapability[]>> = {
+  'world.load': ['runtime.initialize'],
+  'runtime.start': ['runtime.initialize'],
+  'runtime.pause': ['runtime.initialize', 'runtime.start'],
+  'runtime.resume': ['runtime.initialize', 'runtime.start', 'runtime.pause'],
+  'runtime.stop': ['runtime.initialize'],
+  'camera.control': ['runtime.initialize'],
+  'character.create': ['runtime.initialize'],
+  'character.remove': ['runtime.initialize'],
+  'character.move': ['runtime.initialize'],
+  'character.animate': ['runtime.initialize'],
+  'effects.play': ['runtime.initialize'],
+  'environment.update': ['runtime.initialize'],
+  'runtime.status': ['runtime.initialize'],
+  'output.capture': ['runtime.initialize'],
+};
+
+/** Fail contract registration when a declared capability cannot be exercised after initialization. */
+export function assertEngineAdapterCapabilityPrerequisites(capabilities: ReadonlySet<EngineCapability>): void {
+  for (const capability of capabilities) {
+    const missing = (CAPABILITY_PREREQUISITES[capability] ?? []).filter((required) => !capabilities.has(required));
+    if (missing.length > 0) {
+      throw new Error(`Capability ${capability} requires declared capabilities: ${missing.join(', ')}`);
+    }
+  }
 }
 
 /** Register reusable behavioral checks for a concrete EngineAdapter factory. */
@@ -45,6 +62,7 @@ export function defineEngineAdapterContract(name: string, createAdapter: () => E
       expect(adapter.version.trim()).not.toBe('');
       expect(adapter.adapterVersion.trim()).not.toBe('');
       for (const capability of adapter.capabilities) expect(ENGINE_CAPABILITIES).toContain(capability);
+      expect(() => assertEngineAdapterCapabilityPrerequisites(adapter.capabilities)).not.toThrow();
     });
 
     it('reports health and numeric or scalar performance metrics', async () => {
@@ -63,13 +81,13 @@ export function defineEngineAdapterContract(name: string, createAdapter: () => E
       const adapter = createAdapter();
       const id = runtimeId('contract-runtime');
       const actions = operations(adapter, id);
+      assertEngineAdapterCapabilityPrerequisites(adapter.capabilities);
       if (adapter.capabilities.has('runtime.initialize')) {
         const initialize = actions.find(([capability]) => capability === 'runtime.initialize');
         await initialize?.[1]();
       }
       for (const [capability, action] of actions) {
-        if (!canInvokeWithDeclaredPrerequisites(capability, adapter.capabilities)) continue;
-        if (capability === 'runtime.initialize') continue;
+        if (!adapter.capabilities.has(capability) || capability === 'runtime.initialize') continue;
         await action();
       }
       if (adapter.capabilities.has('runtime.status')) {
