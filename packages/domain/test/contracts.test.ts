@@ -17,6 +17,12 @@ describe('engine-independent domain contracts', () => {
     expect(() => assertJsonValue(Symbol('nope'))).toThrow(/symbol/);
     expect(() => assertJsonValue(1n)).toThrow(/bigint/);
     expect(() => assertJsonValue(new Date())).toThrow(/plain object/);
+    const enumerableArrayProperty = [1] as number[] & { extra?: number };
+    enumerableArrayProperty.extra = 2;
+    expect(() => assertJsonValue(enumerableArrayProperty)).toThrow(/array property/);
+    const nonEnumerableArrayProperty = [1];
+    Object.defineProperty(nonEnumerableArrayProperty, 'hidden', { value: 2 });
+    expect(() => assertJsonValue(nonEnumerableArrayProperty)).toThrow(/array property/);
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;
     expect(() => assertJsonValue(cyclic)).toThrow(/cycle/);

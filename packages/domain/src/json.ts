@@ -26,6 +26,15 @@ export function assertJsonValue(value: unknown): asserts value is JsonValue {
     active.add(object);
     try {
       if (Array.isArray(current)) {
+        for (const key of Object.getOwnPropertyNames(current)) {
+          if (key === 'length') continue;
+          const index = Number(key);
+          const isCanonicalArrayIndex = /^(0|[1-9]\d*)$/.test(key)
+            && Number.isInteger(index)
+            && index < 0xffff_ffff
+            && String(index) === key;
+          if (!isCanonicalArrayIndex) throw new TypeError(`Unexpected array property ${key} at ${path}`);
+        }
         for (let index = 0; index < current.length; index += 1) {
           if (!(index in current)) throw new TypeError(`Unexpected array hole at ${path}[${index}]`);
           visit(current[index], `${path}[${index}]`);
