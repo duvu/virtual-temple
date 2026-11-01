@@ -8,6 +8,19 @@ importers:
 
   .: {}
 
+  packages/application:
+    dependencies:
+      '@vtl/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9
+
   packages/domain:
     devDependencies:
       typescript:
