@@ -2,7 +2,7 @@ import { runtimeId } from '@vtl/domain';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ChannelRepository } from '../channel-repository.js';
-import { EntityNotFoundError } from '../http-errors.js';
+import { EntityNotFoundError, requireJsonContentType } from '../http-errors.js';
 
 const paramsSchema = z.object({ runtimeId: z.string().min(1) });
 const actionSchema = z.object({ action: z.enum(['initialize', 'start', 'pause', 'resume', 'stop']) });
@@ -16,6 +16,7 @@ export async function registerRuntimeRoutes(app: FastifyInstance, channels: Chan
     return { ...record, error: { code: 'ADAPTER_FAILURE', message: 'Adapter operation failed' } };
   });
   app.post('/runtimes/:runtimeId/actions', async (request) => {
+    requireJsonContentType(request.headers['content-type']);
     const params = paramsSchema.parse(request.params);
     const { action } = actionSchema.parse(request.body);
     const id = runtimeId(params.runtimeId);

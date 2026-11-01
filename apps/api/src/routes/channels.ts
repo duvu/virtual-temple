@@ -3,7 +3,7 @@ import { channelId, runtimeId, worldId, type JsonValue, type World } from '@vtl/
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ChannelRepository } from '../channel-repository.js';
-import { EntityNotFoundError } from '../http-errors.js';
+import { ChannelEngineMismatchError, EntityNotFoundError, requireJsonContentType } from '../http-errors.js';
 
 const jsonSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
   z.string(), z.number().finite(), z.boolean(), z.null(), z.array(jsonSchema),
@@ -20,11 +20,14 @@ const worldInputSchema = z.object({
   assetIds: z.array(z.string()).optional(), camera: jsonSchema.optional(), characters: z.array(characterSchema).optional(),
   lighting: jsonSchema.optional(), audio: jsonSchema.optional(), effects: jsonSchema.optional(),
 });
-const createChannelSchema = z.object({ name: z.string().trim().min(1), engineId: z.string().trim().min(1).default('threejs'), world: worldInputSchema });
+const createChannelSchema = z.object({ name: z.string().trim().min(1), engineId: z.string().trim().min(1).optional(), world: worldInputSchema });
 
-export async function registerChannelRoutes(app: FastifyInstance, channels: ChannelRepository): Promise<void> {
+export async function registerChannelRoutes(app: FastifyInstance, channels: ChannelRepository, adapterEngineId: string): Promise<void> {
   app.post('/channels', async (request, reply) => {
+    requireJsonContentType(request.headers['content-type']);
     const input = createChannelSchema.parse(request.body);
+    const engineId = input.engineId ?? adapterEngineId;
+    if (engineId !== adapterEngineId) throw new ChannelEngineMismatchError();
     const id = channelId(randomUUID());
     const worldKey = worldId(randomUUID());
     const characters = input.world.characters ?? input.world.scene?.characters ?? [];
@@ -41,7 +44,7 @@ export async function registerChannelRoutes(app: FastifyInstance, channels: Chan
       assetIds, camera: input.world.camera ?? {}, characters,
       lighting: input.world.lighting ?? {}, audio: input.world.audio ?? {}, effects: input.world.effects ?? {},
     };
-    const channel = { channelId: id, name: input.name, worldId: worldKey, engineId: input.engineId, destinations: [], scheduleReferences: [] };
+    const channel = { channelId: id, name: input.name, worldId: worldKey, engineId, destinations: [], scheduleReferences: [] };
     await channels.save({ channel, world });
     return reply.code(201).send(channel);
   });

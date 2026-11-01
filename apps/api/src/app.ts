@@ -26,7 +26,7 @@ export function buildApp(dependencies: AppDependencies): FastifyInstance {
   registerErrorHandler(app);
   app.get('/healthz', async () => ({ status: 'ok' }));
   void app.register(async (instance) => {
-    await registerChannelRoutes(instance, channels);
+    await registerChannelRoutes(instance, channels, dependencies.adapter.engineId);
     await registerRuntimeRoutes(instance, channels);
   });
   return app;

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { EngineAdapter, InMemoryRuntimeRepository } from '@vtl/application';
-import { worldId, type EngineCapability, type RuntimeId, type RuntimeStatus, type World } from '@vtl/domain';
+import { channelId, worldId, type EngineCapability, type RuntimeId, type RuntimeStatus, type World } from '@vtl/domain';
 import { buildApp } from '../src/app.js';
+import { InMemoryChannelRepository } from '../src/channel-repository.js';
 
 class TestAdapter extends EngineAdapter {
   readonly engineId = 'test';
@@ -90,6 +91,48 @@ describe('API', () => {
     const response = await app.inject({ method: 'POST', url: '/channels', payload: { name: '' } });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request' } });
+    await app.close();
+  });
+
+  it('returns stable 400 for malformed JSON and 415 for unsupported content type', async () => {
+    const app = makeApp();
+    const malformed = await app.inject({ method: 'POST', url: '/channels', headers: { 'content-type': 'application/json' }, payload: '{broken' });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json()).toEqual({ error: { code: 'INVALID_JSON', message: 'Malformed JSON request' } });
+    expect(malformed.body).not.toContain('Unexpected token');
+
+    const unsupported = await app.inject({ method: 'POST', url: '/channels', headers: { 'content-type': 'text/plain' }, payload: 'secret body' });
+    expect(unsupported.statusCode).toBe(415);
+    expect(unsupported.json()).toEqual({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' } });
+    expect(unsupported.body).not.toContain('secret body');
+
+    const oversized = await app.inject({ method: 'POST', url: '/channels', headers: { 'content-type': 'application/json' }, payload: ' '.repeat(1_048_577) });
+    expect(oversized.statusCode).toBe(413);
+    expect(oversized.json()).toEqual({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request payload too large' } });
+    await app.close();
+  });
+
+  it('rejects channel engine ids that do not match the configured adapter', async () => {
+    const channels = new InMemoryChannelRepository();
+    const app = buildApp({ adapter: new TestAdapter(), runtimeRepository: new InMemoryRuntimeRepository(), channelRepository: channels });
+    const response = await app.inject({ method: 'POST', url: '/channels', payload: { ...channelBody('Mismatch'), engineId: 'another-engine' } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: { code: 'ENGINE_MISMATCH', message: 'Channel engine does not match configured adapter' } });
+    expect(await channels.list()).toEqual([]);
+    await app.close();
+  });
+
+  it('returns isolated copies of nested world state from the channel repository', async () => {
+    const channels = new InMemoryChannelRepository();
+    const app = buildApp({ adapter: new TestAdapter(), runtimeRepository: new InMemoryRuntimeRepository(), channelRepository: channels });
+    const created = await createChannel(app, 'Nested');
+    const first = await channels.get(channelId(created.channelId));
+    expect(first).toBeDefined();
+    (first!.world.environment as { marker?: string }).marker = 'mutated';
+    (first!.world.scene.assetIds as string[]).push('mutated-asset');
+    const second = await channels.get(channelId(created.channelId));
+    expect(second!.world.environment).toEqual({});
+    expect(second!.world.scene.assetIds).toEqual([]);
     await app.close();
   });
 
