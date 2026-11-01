@@ -6,6 +6,11 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${script_dir}/lib/common.sh"
 cd -- "${VTL_ROOT}"
 
+if (( $# > 1 )); then
+  printf 'Usage: %s [timeout-seconds]\n' "${0##*/}" >&2
+  exit 2
+fi
+
 timeout="${1:-5}"
 if [[ ! "${timeout}" =~ ^[0-9]+$ || ${#timeout} -gt 2 ]]; then
   printf 'Health probe timeout must be an integer from 1 to 60 seconds.\n' >&2
