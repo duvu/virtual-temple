@@ -32,7 +32,9 @@ function moduleSpecifiers(source: ts.SourceFile): string[] {
     }
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const [argument] = node.arguments;
-      if (argument && ts.isStringLiteral(argument)) specifiers.push(argument.text);
+      if (argument && (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))) {
+        specifiers.push(argument.text);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -49,6 +51,19 @@ function isEngineSdkImport(specifier: string): boolean {
 }
 
 describe('architecture boundaries', () => {
+  it('detects engine imports written with template literals without matching comments or logical IDs', () => {
+    const fixture = [
+      'const engineId = `threejs`;',
+      'import(`three`);',
+      '// import(`@react-three/fiber`);',
+    ].join('\n');
+    const source = ts.createSourceFile('fixture.ts', fixture, ts.ScriptTarget.Latest, true);
+    const imports = moduleSpecifiers(source);
+
+    expect(imports).toEqual(['three']);
+    expect(imports.filter(isEngineSdkImport)).toEqual(['three']);
+  });
+
   it('keeps domain and application source independent from engine SDK imports', async () => {
     const files = (await Promise.all(sourceRoots.map(sourceFiles))).flat().sort();
     const violations: string[] = [];
