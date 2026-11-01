@@ -51,17 +51,17 @@ export function defineEngineAdapterContract(name: string, createAdapter: () => E
     it('throws UnsupportedCapabilityError for every undeclared operation', async () => {
       const adapter = createAdapter();
       const id = runtimeId('unsupported-runtime');
-      const actions: Partial<Record<EngineCapability, () => Promise<unknown>>> = {
-        'runtime.initialize': () => adapter.initialize(id), 'world.load': () => adapter.loadWorld(id, sampleWorld),
-        'runtime.start': () => adapter.start(id), 'runtime.stop': () => adapter.stop(id),
-        'runtime.pause': () => adapter.pause(id), 'runtime.resume': () => adapter.resume(id),
-        'camera.control': () => adapter.setCamera(id, {}), 'character.create': () => adapter.spawnCharacter(id, { characterId: 'c', assetId: 'a' }),
-        'character.remove': () => adapter.despawnCharacter(id, 'c'), 'character.move': () => adapter.moveCharacter(id, 'c', { x: 0, y: 0, z: 0 }),
-        'character.animate': () => adapter.playAnimation(id, 'c', 'a'), 'effects.play': () => adapter.showEffect(id, {}),
-        'environment.update': () => adapter.setEnvironment(id, {}), 'runtime.status': () => adapter.getRuntimeStatus(id),
-        'output.capture': () => adapter.captureOutput(id),
-      };
-      for (const [capability, action] of Object.entries(actions) as [EngineCapability, () => Promise<unknown>][]) {
+      const actions: readonly [EngineCapability, () => Promise<unknown>][] = [
+        ['runtime.initialize', () => adapter.initialize(id)], ['world.load', () => adapter.loadWorld(id, sampleWorld)],
+        ['runtime.start', () => adapter.start(id)], ['runtime.stop', () => adapter.stop(id)],
+        ['runtime.pause', () => adapter.pause(id)], ['runtime.resume', () => adapter.resume(id)],
+        ['camera.control', () => adapter.setCamera(id, {})], ['character.create', () => adapter.spawnCharacter(id, { characterId: 'c', assetId: 'a' })],
+        ['character.remove', () => adapter.despawnCharacter(id, 'c')], ['character.move', () => adapter.moveCharacter(id, 'c', { x: 0, y: 0, z: 0 })],
+        ['character.animate', () => adapter.playAnimation(id, 'c', 'a')], ['character.animate', () => adapter.stopAnimation(id, 'c')],
+        ['effects.play', () => adapter.showEffect(id, {})], ['environment.update', () => adapter.setEnvironment(id, {})],
+        ['runtime.status', () => adapter.getRuntimeStatus(id)], ['output.capture', () => adapter.captureOutput(id)],
+      ];
+      for (const [capability, action] of actions) {
         if (!adapter.capabilities.has(capability)) {
           await expect(action()).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY', details: { capability } });
         }
