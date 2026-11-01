@@ -11,8 +11,8 @@ const sampleWorld: World = {
 function operations(adapter: EngineAdapter, id: ReturnType<typeof runtimeId>): readonly [EngineCapability, () => Promise<unknown>][] {
   return [
     ['runtime.initialize', () => adapter.initialize(id)], ['world.load', () => adapter.loadWorld(id, sampleWorld)],
-    ['runtime.start', () => adapter.start(id)], ['runtime.stop', () => adapter.stop(id)],
-    ['runtime.pause', () => adapter.pause(id)], ['runtime.resume', () => adapter.resume(id)],
+    ['runtime.start', () => adapter.start(id)], ['runtime.pause', () => adapter.pause(id)],
+    ['runtime.resume', () => adapter.resume(id)], ['runtime.stop', () => adapter.stop(id)],
     ['camera.control', () => adapter.setCamera(id, { preset: 'wide' })],
     ['character.create', () => adapter.spawnCharacter(id, { characterId: 'c', assetId: 'a', position: { x: 0, y: 0, z: 0 } })],
     ['character.remove', () => adapter.despawnCharacter(id, 'c')],
@@ -24,6 +24,16 @@ function operations(adapter: EngineAdapter, id: ReturnType<typeof runtimeId>): r
     ['runtime.status', () => adapter.getRuntimeStatus(id)],
     ['output.capture', () => adapter.captureOutput(id)],
   ];
+}
+
+/** Only invoke runtime-scoped operations when the adapter declares initialization. */
+function canInvokeWithDeclaredPrerequisites(capability: EngineCapability, capabilities: ReadonlySet<EngineCapability>): boolean {
+  if (!capabilities.has(capability)) return false;
+  if (capability === 'runtime.initialize') return true;
+  if (!capabilities.has('runtime.initialize')) return false;
+  if (capability === 'runtime.pause') return capabilities.has('runtime.start');
+  if (capability === 'runtime.resume') return capabilities.has('runtime.start') && capabilities.has('runtime.pause');
+  return true;
 }
 
 /** Register reusable behavioral checks for a concrete EngineAdapter factory. */
@@ -58,7 +68,8 @@ export function defineEngineAdapterContract(name: string, createAdapter: () => E
         await initialize?.[1]();
       }
       for (const [capability, action] of actions) {
-        if (!adapter.capabilities.has(capability) || capability === 'runtime.initialize') continue;
+        if (!canInvokeWithDeclaredPrerequisites(capability, adapter.capabilities)) continue;
+        if (capability === 'runtime.initialize') continue;
         await action();
       }
       if (adapter.capabilities.has('runtime.status')) {

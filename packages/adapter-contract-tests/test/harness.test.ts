@@ -22,10 +22,22 @@ class AllOperationsAdapter extends MinimalAdapter {
 
   override async initialize(id: RuntimeId): Promise<void> { this.statuses.set(id, 'READY'); }
   override async loadWorld(_id: RuntimeId, _world: Parameters<EngineAdapter['loadWorld']>[1]): Promise<void> {}
-  override async start(id: RuntimeId): Promise<void> { this.statuses.set(id, 'RUNNING'); }
-  override async stop(id: RuntimeId): Promise<void> { this.statuses.set(id, 'STOPPED'); }
-  override async pause(id: RuntimeId): Promise<void> { this.statuses.set(id, 'PAUSED'); }
-  override async resume(id: RuntimeId): Promise<void> { this.statuses.set(id, 'RUNNING'); }
+  override async start(id: RuntimeId): Promise<void> {
+    this.requireStatus(id, 'READY');
+    this.statuses.set(id, 'RUNNING');
+  }
+  override async stop(id: RuntimeId): Promise<void> {
+    this.requireStatus(id, 'READY', 'RUNNING', 'PAUSED');
+    this.statuses.set(id, 'STOPPED');
+  }
+  override async pause(id: RuntimeId): Promise<void> {
+    this.requireStatus(id, 'RUNNING');
+    this.statuses.set(id, 'PAUSED');
+  }
+  override async resume(id: RuntimeId): Promise<void> {
+    this.requireStatus(id, 'PAUSED');
+    this.statuses.set(id, 'RUNNING');
+  }
   override async setCamera(_id: RuntimeId, _camera: JsonValue): Promise<void> {}
   override async spawnCharacter(_id: RuntimeId, _character: CharacterPlacement): Promise<void> {}
   override async despawnCharacter(_id: RuntimeId, _characterId: string): Promise<void> {}
@@ -35,6 +47,9 @@ class AllOperationsAdapter extends MinimalAdapter {
   override async showEffect(_id: RuntimeId, _effect: JsonValue): Promise<void> {}
   override async setEnvironment(_id: RuntimeId, _environment: JsonValue): Promise<void> {}
   override async getRuntimeStatus(id: RuntimeId): Promise<RuntimeStatus> { return this.statuses.get(id) ?? 'CREATED'; }
+  private requireStatus(id: RuntimeId, ...allowed: RuntimeStatus[]): void {
+    if (!allowed.includes(this.statuses.get(id) ?? 'CREATED')) throw new Error('Illegal lifecycle operation order');
+  }
   override async captureOutput(_id: RuntimeId): Promise<JsonValue> { return {}; }
 }
 
