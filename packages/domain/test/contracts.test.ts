@@ -23,6 +23,18 @@ describe('engine-independent domain contracts', () => {
     const nonEnumerableArrayProperty = [1];
     Object.defineProperty(nonEnumerableArrayProperty, 'hidden', { value: 2 });
     expect(() => assertJsonValue(nonEnumerableArrayProperty)).toThrow(/array property/);
+    const hiddenObjectProperty = { visible: 1 };
+    Object.defineProperty(hiddenObjectProperty, 'hidden', { value: 2 });
+    expect(() => assertJsonValue(hiddenObjectProperty)).toThrow(/non-enumerable/);
+    const hiddenToJson = { value: 1 };
+    Object.defineProperty(hiddenToJson, 'toJSON', { value: () => 'changed' });
+    expect(() => assertJsonValue(hiddenToJson)).toThrow(/non-enumerable/);
+    const objectGetter = Object.defineProperty({}, 'value', { enumerable: true, get: () => 1 });
+    expect(() => assertJsonValue(objectGetter)).toThrow(/accessor/);
+    const arrayGetter = [];
+    Object.defineProperty(arrayGetter, '0', { enumerable: true, get: () => 1 });
+    arrayGetter.length = 1;
+    expect(() => assertJsonValue(arrayGetter)).toThrow(/accessor/);
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;
     expect(() => assertJsonValue(cyclic)).toThrow(/cycle/);

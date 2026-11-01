@@ -6,6 +6,14 @@ export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: 
 export function assertJsonValue(value: unknown): asserts value is JsonValue {
   const active = new WeakSet<object>();
 
+  function ownDataValue(object: object, key: string, path: string): unknown {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    if (descriptor === undefined) throw new TypeError(`Unexpected missing property ${key} at ${path}`);
+    if (!descriptor.enumerable) throw new TypeError(`Unexpected non-enumerable property ${key} at ${path}`);
+    if (!Object.hasOwn(descriptor, 'value')) throw new TypeError(`Unexpected accessor property ${key} at ${path}`);
+    return descriptor.value as unknown;
+  }
+
   function visit(current: unknown, path: string): void {
     if (current === null || typeof current === 'string' || typeof current === 'boolean') return;
     if (typeof current === 'number') {
@@ -34,10 +42,12 @@ export function assertJsonValue(value: unknown): asserts value is JsonValue {
             && index < 0xffff_ffff
             && String(index) === key;
           if (!isCanonicalArrayIndex) throw new TypeError(`Unexpected array property ${key} at ${path}`);
+          ownDataValue(current, key, path);
         }
         for (let index = 0; index < current.length; index += 1) {
-          if (!(index in current)) throw new TypeError(`Unexpected array hole at ${path}[${index}]`);
-          visit(current[index], `${path}[${index}]`);
+          const key = String(index);
+          if (!Object.hasOwn(current, key)) throw new TypeError(`Unexpected array hole at ${path}[${index}]`);
+          visit(ownDataValue(current, key, path), `${path}[${index}]`);
         }
         return;
       }
@@ -46,7 +56,9 @@ export function assertJsonValue(value: unknown): asserts value is JsonValue {
       if (prototype !== Object.prototype && prototype !== null) {
         throw new TypeError(`Expected a plain object at ${path}`);
       }
-      for (const key of Object.keys(current)) visit((current as Record<string, unknown>)[key], `${path}.${key}`);
+      for (const key of Object.getOwnPropertyNames(current)) {
+        visit(ownDataValue(current, key, path), `${path}.${key}`);
+      }
     } finally {
       active.delete(object);
     }
